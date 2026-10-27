@@ -37,17 +37,40 @@ function fineTuneMapZoom(map, firstzoom = 1, secondzoom = 1, delta = 0.5) {
     }
 }
 
-// Create the map and set its [Latitude, Longitude] and Zoom. Larger numbers zoom in; smaller zoom out.
+// Create the map and set its [Latitude, Longitude], Zoom, and style. Larger numbers zoom in; smaller zoom out.
+// Updated with Claude Sonnet 5.5
 function setUpMap(coordinates, zoom = 12, delta = 0.5) {
    var map = L.map('mapid', {
       zoomDelta: delta,
       zoomSnap: 0
    }).setView(coordinates, zoom);
-   
-   // Where the map tiles come from, whether to show a Kilometers/Miles scale, and a handy function for making map pins. Generally don't change this
-   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar', attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'}).addTo(map);
-   L.control.scale().addTo(map);
 
+   // Street Map. Where the map tiles come from, whether to show a Kilometers/Miles scale, and a handy function for making map pins. Generally don't change this
+   var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {
+      foo: 'bar',
+      maxZoom: 19,
+      attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'
+   }).addTo(map);
+
+   // Satellite imagery (Esri World Imagery, no API key needed)
+   var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+   });
+
+   // Optional: place names and roads on top of the imagery
+   var labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19
+   });
+   var hybrid = L.layerGroup([satellite, labels]);
+
+   L.control.layers({
+      "Street": street,
+      "Satellite": satellite,
+      "Satellite + Labels": hybrid
+   }, null, {position: 'topright'}).addTo(map);
+
+   L.control.scale().addTo(map);
    return map;
 };
 
