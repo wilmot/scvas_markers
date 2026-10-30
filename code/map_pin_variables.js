@@ -5,6 +5,12 @@
 
 var version = "20210109.3";
 
+// Remember what kind of pointer was used last (mouse/trackpad vs. finger)
+var lastPointerType = 'mouse';
+document.addEventListener('pointerdown', function (e) {
+    lastPointerType = e.pointerType;
+}, true);
+
 // Place a pin on a map
 // Example: pin([37.313167, -122.063596], "<b>McClellan Ranch Parking</b>", "parking")
 function pin(coordinates, html = "<b>New Pin</b>", iconName = "no_number") {
@@ -16,25 +22,58 @@ function pin(coordinates, html = "<b>New Pin</b>", iconName = "no_number") {
       popupAnchor: [1, -34],
       shadowSize: [41, 41]
     });
-    var marker = L.marker(coordinates, {icon: icon});
-    marker.addTo(mymap).bindPopup(html);
-    marker.on('mouseover',function() { this.openPopup();});
-//    marker.on('mouseout', function() { this.closePopup();});
-}
+    var marker = L.marker(coordinates, {icon: icon}).addTo(mymap);
+    var el = marker.getElement();
+    var m = html.match(/href\s*=\s*["']([^"']+)["']/i);   // first link in the label
 
-// Tweak the zoom of the map for desktop vs mobile
-function fineTuneMapZoom(map, firstzoom = 1, secondzoom = 1, delta = 0.5) {
-    map.options.zoomDelta = delta
-    if (map.getSize().x > 600) { // Probably desktop
-      if (firstzoom > 0) {
-        map.zoomIn(firstzoom);
-      }
+    if (!m) {
+        // No link: plain popup. Hover opens it for mouse/trackpad; taps open it as usual.
+        marker.bindPopup(html);
+        el.addEventListener('pointerenter', function (e) {
+            if (e.pointerType === 'mouse') { marker.openPopup(); }
+        });
+        return;
     }
-    else { // Probably mobile or otherwise narrow screen
-      if (secondzoom > 0) {
-        map.zoomIn(secondzoom);
-      }
+
+    var url = m[1];
+    function go(e) {
+        if (e && e.preventDefault) { e.preventDefault(); }
+        window.location.href = url;
     }
+
+    var popup = L.popup({offset: L.point(1, -34)})
+                 .setLatLng(coordinates)
+                 .setContent(html);
+
+    // Wire up the label once: mouse/trackpad mousedown goes, a finger tap goes
+    var wired = false;
+    popup.on('add', function () {
+        if (wired) { return; }
+        wired = true;
+        var pe = popup.getElement();
+        pe.style.cursor = 'pointer';
+        pe.addEventListener('pointerdown', function (e) {
+            if (e.pointerType === 'mouse') { go(e); }
+        });
+        pe.addEventListener('click', function (e) {
+            if (lastPointerType !== 'mouse') { go(e); }
+        });
+    });
+
+    // Mouse or trackpad (Mac, or iPad with keyboard): hover shows the label, mousedown goes
+    el.addEventListener('pointerenter', function (e) {
+        if (e.pointerType === 'mouse') { popup.openOn(mymap); }
+    });
+    el.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse') { go(e); }
+    });
+
+    // Finger: first tap shows the label, second tap goes
+    marker.on('click', function () {
+        if (lastPointerType === 'mouse') { return; }   // already handled on mousedown
+        if (mymap.hasLayer(popup)) { go(); }
+        else { popup.openOn(mymap); }
+    });
 }
 
 // Create the map and set its [Latitude, Longitude], Zoom, and style. Larger numbers zoom in; smaller zoom out.
